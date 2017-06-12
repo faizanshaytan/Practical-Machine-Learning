@@ -1,0 +1,166 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: '@faizanshaytan'
+date: "6/11/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Practical Machine Learning Project | Prediction Assignment Writeup
+
+
+### I. Overview
+
+This project is the basis for the final Peer Assessment project from the *Practical Machine Learning* course through Coursera's Data Science focus.
+
+The project was configured on OSX using RStudio to create this project writeup as a html file. This can also be easily made into a PDF since the knitr functionality is quite powerful.  Moreover, using the prediction models developed while completing this project, one must also use the model to complete course quiz.
+
+The goal of analyzing the HAR data was to predict how 6 participants performed a series of exercies as evidenced through the official "Background" for the project that has been included below.  This has been encapsulated by the "*classe*" variable, found within the training set linked below.  This was one of the salient focuses of this assignment.  The machine learning algorithm outlined below was then applied to the 20 test cases available within the testing data and applied to yield the answers for the course quiz.s
+
+### II. Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+####Data
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+More information regarding the source can be found here: http://groupware.les.inf.puc-rio.br/har.
+
+
+### III.1 | Setup for Environment (loading of libraries required)
+```{r}
+library(e1071)
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+library(randomForest)
+
+```
+
+### III.2 | Loading Data
+Read and check raw data sets to identify any missing data, 'NA' values, and 'DIV/0!' values and change replace them with 'NA'
+```{r}
+URLtraining <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+URLtesting <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(URLtraining), na.strings = c("", "NA", "#DIV0!"))
+testing <- read.csv(url(URLtesting), na.strings = c("", "NA", "#DIV0!"))
+```
+
+We need to ensure that "classe" is not included into testing data set, so define the same columns
+```{r}
+copyColumnName <- colnames(training) == colnames(testing)
+colnames(training)[copyColumnName==FALSE]
+```
+
+### III.3 | Checking Data Cleanup
+```{r}
+
+training<-training[,colSums(is.na(training)) == 0]
+testing <-testing[,colSums(is.na(testing)) == 0]
+```
+
+### III.4 | Checking Column Names of Training Dataset
+```{r}
+head(colnames(training))
+```
+
+7 variables from the begining of the training data was removed since they are irrelevant to prediction.
+```{r}
+training <- training[,8:dim(training)[2]]
+testing <- testing[,8:dim(testing)[2]]
+```
+
+### IV | Data Exploration
+
+
+### IV.1 | Training, Testing & Data Validation
+
+The training dataset was separated into three parts:
+* tranining (60%)
+* testing (20%)
+* validation (20%)
+
+```{r}
+set.seed(123)
+
+seed_data1 <- createDataPartition(y = training$classe, p = 0.8, list = F)
+seed_data2 <- training[seed_data1,]
+
+validation <- training[-seed_data1,]
+
+training_data1 <- createDataPartition(y = seed_data2$classe, p = 0.75, list = F)
+training_data2 <- seed_data2[training_data1,]
+
+test_data <- seed_data2[-training_data1,]
+
+```
+
+Plot of *classe*:
+```{r}
+qplot(classe,
+      data = training_data2,
+      main = "Distribution of Classes",
+      fill = "4"
+      )
+```
+
+
+### IV.2 | These are the Predictors of the Data Set:
+```{r}
+names(training_data2[,-53])
+```
+
+### V | Prediction Models
+
+### V.1 | Prediction Model: Decision Tree Model
+```{r}
+model_tree <- rpart(classe ~ ., data=training_data2, method="class")
+prediction_tree <- predict(model_tree, test_data, type="class")
+class_tree <- confusionMatrix(prediction_tree, test_data$classe)
+class_tree
+
+```
+
+### V.2 | Checking the Decision Tree Model (model_tree)
+
+```{r}
+rpart.plot(model_tree, main = "Decision Tree", under = T, faclen = 0)
+```
+
+### V.3 | Prediction Model: Random Forest Model
+
+```{r}
+forest_model <- randomForest(classe ~ ., data=training_data2, method="class")
+prediction_forest <- predict(forest_model, test_data, type="class")
+random_forest <- confusionMatrix(prediction_forest, test_data$classe)
+random_forest
+```
+
+### V.4.| Final Prediction
+*Prediction Algorithm and Confusion Matrix*
+
+```{r}
+prediction1 <- predict(forest_model, newdata=test_data, type="class")
+confusionMatrix(prediction1, test_data$classe)
+```
+
+The Random Forest Model created in Section V.3 is a significantly better predictive model than the Decision Tree Model created in V.1-V.2.  The Random Forest Model has a greater accuracy of 0.9939 as opposed to the Decision Tree with has an accuracy of 0.728, also meaning that considering more predictors for the model would be superfluous.
+
+### VI | Project Conclusions
+
+In this HAR lab study, we were able to reduce the characteristics of the training and testing datasets' predictors.  The characteristics alluded to were the percentage of 'NA' values, correlation, low variance, and level of skew.
+
+This has lead the analysis to scale the variables across both testing and training datasets.  To generate appropriate Decision Tree and Random Forest Models, the training data set was segmented into subtraining and validation parts in order to assess its accuracy and compare the two.
+
+Ultimately, the data led us to believe that the Random Forest Model (*99.39%*) has a much greater accuracy than the Decision Tree Model (*72.8%*)
